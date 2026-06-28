@@ -1,3 +1,6 @@
 __pycache__
 .env
 test_api.sh
+.mypy_cache
+.ruff_cache
+.pytest_cache

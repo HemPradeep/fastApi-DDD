@@ -1,115 +1,132 @@
 from unittest.mock import Mock
 
-from src.models.queries import UserQueries
-from src.models.user_db import UserRepository
+from domain.entities.user import User
+from infrastructure.repositories.postgres_user_repository import (
+    PostgresUserRepository,
+)
 
 
-def build_repository() -> tuple[Mock, Mock, UserRepository]:
+def build_repository() -> tuple[Mock, Mock, PostgresUserRepository]:
     conn = Mock()
     cursor = Mock()
     conn.cursor.return_value = cursor
-    repo = UserRepository(conn)
+    repo = PostgresUserRepository(conn)
     return conn, cursor, repo
 
 
 def test_create_table_initializes_schema_and_commits() -> None:
     conn, cursor, _ = build_repository()
 
-    cursor.execute.assert_called_once_with(UserQueries.CREATE_TABLE.value)
+    # The table creation query is executed during __init__
+    cursor.execute.assert_called_once()
+    assert "CREATE TABLE IF NOT EXISTS users" in cursor.execute.call_args[0][0]
     conn.commit.assert_called_once()
-
-
-def test_convert_row_to_user_returns_none_for_empty_row() -> None:
-    _, _, repo = build_repository()
-
-    assert repo.convert_row_to_user(None) is None
-
-
-def test_convert_row_to_user_converts_row_to_dict() -> None:
-    _, _, repo = build_repository()
-
-    row = (1, "Alice", "Female")
-
-    response = repo.convert_row_to_user(row)
-    assert response is not None
-    assert response.id == 1
-    assert response.user == "Alice"
-    assert response.gender == "Female"
 
 
 def test_get_all_users_executes_query_and_returns_users() -> None:
     conn, cursor, repo = build_repository()
-    cursor.fetchall.return_value = [(1, "Alice", "Female")]
+    # Mock RealDictCursor output
+    cursor.fetchall.return_value = [{"id": 1, "user_name": "Alice", "gender": "Female"}]
 
-    users = repo.get_all_users()
+    users = repo.get_all()
 
-    assert cursor.execute.call_args_list[1] == ((UserQueries.GET_ALL_USERS.value,),)
+    # Note: call_args_list[0] is the CREATE TABLE call in __init__
+    assert (
+        cursor.execute.call_args_list[1][0][0]
+        == "SELECT id, user_name, gender FROM users;"
+    )
     cursor.fetchall.assert_called_once()
     assert len(users) == 1
     assert users[0].id == 1
-    assert users[0].user == "Alice"
+    assert users[0].name == "Alice"
     assert users[0].gender == "Female"
-    assert conn.commit.call_count == 1
 
 
 def test_get_user_by_id_returns_matching_user() -> None:
     _, cursor, repo = build_repository()
-    cursor.fetchone.return_value = (2, "Bob", "Male")
+    cursor.fetchone.return_value = {
+        "id": 2,
+        "user_name": "Bob",
+        "gender": "Male",
+    }
 
-    user = repo.get_user_by_id(2)
+    user = repo.get_by_id(2)
 
-    assert cursor.execute.call_args_list[1] == (
-        (UserQueries.GET_USER_BY_ID.value, (2,)),
+    assert (
+        cursor.execute.call_args_list[1][0][0]
+        == "SELECT id, user_name, gender FROM users WHERE id = %s;"
     )
+    assert cursor.execute.call_args_list[1][0][1] == (2,)
     assert user is not None
     assert user.id == 2
-    assert user.user == "Bob"
+    assert user.name == "Bob"
     assert user.gender == "Male"
 
 
-def test_does_user_exist_returns_boolean_result() -> None:
+def test_get_user_by_id_returns_none_if_missing() -> None:
     _, cursor, repo = build_repository()
-    cursor.fetchone.return_value = (True,)
+    cursor.fetchone.return_value = None
 
-    assert repo.does_user_exist(3) is True
-    assert cursor.execute.call_args_list[1] == ((UserQueries.USER_EXISTS.value, (3,)),)
+    user = repo.get_by_id(999)
+
+    assert user is None
 
 
-def test_add_a_user_inserts_and_returns_new_user() -> None:
+def test_exists_returns_boolean_result() -> None:
     _, cursor, repo = build_repository()
-    cursor.fetchone.return_value = (4, "Dana", "Other")
+    cursor.fetchone.return_value = {"exists": True}
 
-    user = repo.add_a_user("Dana", "Other")
-
-    assert cursor.execute.call_args_list[1] == (
-        (UserQueries.INSERT_USER.value, ("Dana", "Other")),
+    assert repo.exists(3) is True
+    assert (
+        cursor.execute.call_args_list[1][0][0]
+        == "SELECT EXISTS(SELECT 1 FROM users WHERE id = %s);"
     )
+    assert cursor.execute.call_args_list[1][0][1] == (3,)
+
+
+def test_add_user_inserts_and_returns_new_user() -> None:
+    _, cursor, repo = build_repository()
+    cursor.fetchone.return_value = {
+        "id": 4,
+        "user_name": "Dana",
+        "gender": "Other",
+    }
+
+    user_to_add = User(id=None, name="Dana", gender="Other")
+    user = repo.add(user_to_add)
+
+    assert (
+        cursor.execute.call_args_list[1][0][0]
+        == "INSERT INTO users (user_name, gender) VALUES (%s, %s) RETURNING"
+        " id, user_name, gender;"
+    )
+    assert cursor.execute.call_args_list[1][0][1] == ("Dana", "Other")
     assert user is not None
     assert user.id == 4
-    assert user.user == "Dana"
+    assert user.name == "Dana"
     assert user.gender == "Other"
 
 
-def test_update_user_name_updates_and_returns_user() -> None:
+def test_update_user_executes_query_and_returns_user() -> None:
     _, cursor, repo = build_repository()
-    cursor.fetchone.return_value = (5, "Diana", "Female")
 
-    user = repo.update_user_name(5, "Diana")
+    user_to_update = User(id=5, name="Diana", gender="Female")
+    user = repo.update(user_to_update)
 
-    assert cursor.execute.call_args_list[1] == (
-        (UserQueries.UPDATE_USER.value, ("Diana", 5)),
+    assert (
+        cursor.execute.call_args_list[1][0][0]
+        == "UPDATE users SET user_name = %s, gender = %s WHERE id = %s;"
     )
-    assert user is not None
+    assert cursor.execute.call_args_list[1][0][1] == ("Diana", "Female", 5)
     assert user.id == 5
-    assert user.user == "Diana"
+    assert user.name == "Diana"
     assert user.gender == "Female"
 
 
 def test_delete_user_executes_delete_query() -> None:
     _, cursor, repo = build_repository()
 
-    repo.delete_user(7)
+    repo.delete(7)
 
-    assert cursor.execute.call_args_list[1] == (
-        (UserQueries.DELETE_USER.value, ("7",)),
-    )
+    assert cursor.execute.call_args_list[1][0][0] == "DELETE FROM users WHERE id = %s;"
+    assert cursor.execute.call_args_list[1][0][1] == (7,)

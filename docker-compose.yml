@@ -4,7 +4,8 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      [postgres]
+      postgres:
+        condition: service_healthy
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -23,6 +24,11 @@ services:
       POSTGRES_DB: userdb
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d userdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
 volumes:
