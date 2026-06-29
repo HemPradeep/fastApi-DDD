@@ -1,16 +1,19 @@
 import pytest
 
-from application.dtos.request_objects import CreateUserRequest, UpdateUserNameRequest
-from application.use_cases.create_user import CreateUserUseCase
-from application.use_cases.delete_user import DeleteUserUseCase
-from application.use_cases.get_user import GetAllUsersUseCase, GetUserUseCase
-from application.use_cases.update_user import UpdateUserUseCase
-from domain.exceptions.user_exceptions import (
+from user.application.dtos.request_objects import (
+    CreateUserRequest,
+    UpdateUserNameRequest,
+)
+from user.application.use_cases.create_user import CreateUserUseCase
+from user.application.use_cases.delete_user import DeleteUserUseCase
+from user.application.use_cases.get_user import GetAllUsersUseCase, GetUserUseCase
+from user.application.use_cases.update_user import UpdateUserUseCase
+from user.domain.exceptions.user_exceptions import (
     InvalidUserData,
     InvalidUserName,
     UserNotFound,
 )
-from infrastructure.inmemory.inmemory_user_repository import (
+from user.infrastructure.inmemory.inmemory_user_repository import (
     InMemoryUserRepository,
 )
 
@@ -22,7 +25,7 @@ def user_repo() -> InMemoryUserRepository:
 
 def test_create_user_success(user_repo: InMemoryUserRepository) -> None:
     use_case = CreateUserUseCase(user_repo)
-    request = CreateUserRequest(user="Alice", gender="Female")
+    request = CreateUserRequest(user_name="Alice", gender="Female")
 
     user = use_case.execute(request)
 
@@ -37,7 +40,7 @@ def test_create_user_invalid_data(user_repo: InMemoryUserRepository) -> None:
 
     # Name with numbers
     with pytest.raises(InvalidUserData):
-        use_case.execute(CreateUserRequest(user="Alice123", gender="Female"))
+        use_case.execute(CreateUserRequest(user_name="Alice123", gender="Female"))
 
     # Invalid gender is handled by Pydantic, but if bypassed:
     with pytest.raises(InvalidUserData):
@@ -50,7 +53,7 @@ def test_create_user_invalid_data(user_repo: InMemoryUserRepository) -> None:
 
 def test_get_user_success(user_repo: InMemoryUserRepository) -> None:
     # Add dummy user
-    from domain.entities.user import User
+    from user.domain.entities.user import User
 
     existing_user = user_repo.add(User(id=None, name="Bob", gender="Male"))
     assert existing_user.id is not None
@@ -71,7 +74,7 @@ def test_get_user_not_found(user_repo: InMemoryUserRepository) -> None:
 
 
 def test_get_all_users(user_repo: InMemoryUserRepository) -> None:
-    from domain.entities.user import User
+    from user.domain.entities.user import User
 
     user_repo.add(User(id=None, name="Bob", gender="Male"))
     user_repo.add(User(id=None, name="Alice", gender="Female"))
@@ -85,14 +88,14 @@ def test_get_all_users(user_repo: InMemoryUserRepository) -> None:
 
 
 def test_update_user_name_success(user_repo: InMemoryUserRepository) -> None:
-    from domain.entities.user import User
+    from user.domain.entities.user import User
 
     existing_user = user_repo.add(User(id=None, name="Charlie", gender="Other"))
     assert existing_user.id is not None
 
     use_case = UpdateUserUseCase(user_repo)
     updated = use_case.execute(
-        existing_user.id, UpdateUserNameRequest(user="Charly")
+        existing_user.id, UpdateUserNameRequest(user_name="Charly")
     )
 
     assert updated.name == "Charly"
@@ -105,18 +108,18 @@ def test_update_user_invalid_name(user_repo: InMemoryUserRepository) -> None:
     use_case = UpdateUserUseCase(user_repo)
 
     with pytest.raises(InvalidUserName):
-        use_case.execute(1, UpdateUserNameRequest(user="Charly123"))
+        use_case.execute(1, UpdateUserNameRequest(user_name="Charly123"))
 
 
 def test_update_user_not_found(user_repo: InMemoryUserRepository) -> None:
     use_case = UpdateUserUseCase(user_repo)
 
     with pytest.raises(UserNotFound):
-        use_case.execute(999, UpdateUserNameRequest(user="Charly"))
+        use_case.execute(999, UpdateUserNameRequest(user_name="Charly"))
 
 
 def test_delete_user_success(user_repo: InMemoryUserRepository) -> None:
-    from domain.entities.user import User
+    from user.domain.entities.user import User
 
     existing_user = user_repo.add(User(id=None, name="Dana", gender="Female"))
     assert existing_user.id is not None

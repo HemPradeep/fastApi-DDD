@@ -1,7 +1,7 @@
 from unittest.mock import Mock
 
-from domain.entities.user import User
-from infrastructure.repositories.postgres_user_repository import (
+from user.domain.entities.user import User
+from user.infrastructure.repositories.postgres_user_repository import (
     PostgresUserRepository,
 )
 

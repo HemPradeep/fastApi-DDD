@@ -1,17 +1,18 @@
-from typing import AsyncGenerator
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
-from domain.exceptions.user_exceptions import (
+from post.presentation.controllers.post_controller import router as post_router
+from shared.infrastructure.database_connection import Database
+from user.domain.exceptions.user_exceptions import (
     InvalidUserData,
     InvalidUserName,
     UserNotFound,
 )
-from infrastructure.database import Database
-from presentation.controllers.user_controller import router
+from user.presentation.controllers.user_controller import router as user_router
 
 load_dotenv()
 
@@ -49,4 +50,5 @@ def invalid_user_name_handler(request: Request, exc: InvalidUserName) -> JSONRes
     )
 
 
-app.include_router(router)
+app.include_router(user_router, prefix="/api")
+app.include_router(post_router, prefix="/api")

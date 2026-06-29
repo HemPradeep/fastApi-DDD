@@ -7,9 +7,11 @@ import pytest
 from fastapi.testclient import TestClient
 from psycopg2.extensions import connection
 
-from infrastructure.repositories.postgres_user_repository import PostgresUserRepository
 from main import app
-from presentation.controllers.user_controller import get_user_repository
+from user.infrastructure.repositories.postgres_user_repository import (
+    PostgresUserRepository,
+)
+from user.presentation.controllers.user_controller import get_user_repository
 
 
 def get_test_connection() -> connection:
@@ -22,14 +24,9 @@ def get_test_connection() -> connection:
 
 
 def reset_database(conn: connection) -> None:
-    with conn.cursor() as cursor:
-        cursor.execute("DELETE FROM users;")
-        try:
-            cursor.execute(
-                "SELECT setval(pg_get_serial_sequence('users', 'id'), 1, false);"
-            )
-        except Exception:
-            pass
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM users;")
+    cursor.execute("SELECT setval(pg_get_serial_sequence('users', 'id'), 1, false);")
     conn.commit()
 
 
